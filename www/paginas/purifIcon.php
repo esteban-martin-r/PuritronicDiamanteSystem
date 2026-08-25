@@ -1,0 +1,1 @@
+<link rel="icon" type="image/jpeg" href="../purificadora/imagenes/puritronicImage.jpg">
