@@ -157,16 +157,37 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 $stmtResumen->execute([$id_compra]);
                 $datosVenta = $stmtResumen->fetch(PDO::FETCH_ASSOC);
 
+
                 $conn->commit();
                 $mostrarTicketFinal = true;
                 unset($_SESSION['error_pago']);
-            }
+
+
+            } 
         } catch (PDOException $e) {
             if ($conn->inTransaction()) $conn->rollBack();
             $_SESSION['mensaje'] = ['tipo' => 'danger', 'texto' => "Error al procesar: " . $e->getMessage()];
             header("Location: ../index.php");
             exit;
         }
+    }
+}
+
+// Calculamos el progreso de garrafones para mostrarlo en el ticket.
+// La tabla cliente_progreso_promo solo se actualiza en el Paso 2 (al confirmar el pago),
+// así que si todavía no se confirma, hay que sumar esta venta "a mano" antes de mostrarla.
+$garrafonesActuales = 0;
+if ($datosVenta) {
+    $stmtProgresoTicket = $conn->prepare("SELECT garrafones_acumulados FROM cliente_progreso_promo WHERE codigo_cliente = ?");
+    $stmtProgresoTicket->execute([$datosVenta['codigo_cliente']]);
+    $progresoGuardado = (int)$stmtProgresoTicket->fetchColumn();
+
+    if ($mostrarTicketFinal) {
+        // El pago ya se confirmó: la tabla ya quedó actualizada con esta venta incluida.
+        $garrafonesActuales = $progresoGuardado;
+    } else {
+        // Paso 1 (o reintento por pago insuficiente): la tabla aún NO incluye esta venta.
+        $garrafonesActuales = ($progresoGuardado + (int)$datosVenta['cantidad_garrafones']) % 10;
     }
 }
 ?>
@@ -233,6 +254,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                             <span class="fw-bold">- $<?= number_format($datosVenta['descuento_aplicado'], 2) ?></span>
                         </div>
                     <?php endif; ?>
+                        <div class="item-row text">
+                            <span>Garrafones Actuales:</span>
+                            <span class="item-value"><?= $garrafonesActuales ?>/10</span>
+                        </div>
                 </div>
 
                 <div class="total-section text-center">
