@@ -211,6 +211,16 @@ if ($datosVenta) {
         .item-value { font-weight: 600; color: #343a40; }
         .total-section { border-top: 2px dashed #dee2e6; margin-top: 20px; padding-top: 20px; }
         .pago-detalle { background-color: #f8f9fa; border-radius: 10px; padding: 15px; margin-top: 15px; border: 1px solid #eee; }
+        .modal-content { border-radius: 15px; border: none; overflow: hidden; }
+        .modal-header { background: linear-gradient(135deg, #007bff, #0056b3); color: white; border-bottom: none; }
+        .confirm-cliente-box { background: #f8f9fa; border-radius: 10px; padding: 14px 16px; margin-bottom: 18px; border: 1px solid #eee; }
+        .confirm-cliente-nombre { font-weight: 700; color: #343a40; text-transform: uppercase; font-size: 1rem; }
+        .confirm-cliente-codigo { color: #6c757d; font-size: 0.85rem; }
+        .confirm-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #f0f0f0; }
+        .confirm-row:last-of-type { border-bottom: none; }
+        .confirm-label { color: #6c757d; font-size: 0.9rem; display: flex; align-items: center; gap: 6px; }
+        .confirm-value { font-weight: 700; font-size: 1rem; color: #343a40; }
+        .confirm-total-box { border-top: 2px dashed #dee2e6; margin-top: 14px; padding-top: 14px; text-align: center; }
     </style>
 </head>
 <body>
@@ -266,7 +276,7 @@ if ($datosVenta) {
                 </div>
 
                 <?php if (!$mostrarTicketFinal): ?>
-                    <form action="sumar.php" method="POST" class="mt-4">
+                    <form action="sumar.php" method="POST" class="mt-4" id="formPago">
                         <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
                         <input type="hidden" name="id_compra" value="<?= $datosVenta['id_compra'] ?>">
                         
@@ -274,11 +284,15 @@ if ($datosVenta) {
                             <label class="small fw-bold text-secondary mb-2 text-center d-block">¿Cuánto entregó el cliente?</label>
                             <div class="input-group">
                                 <span class="input-group-text bg-white">$</span>
-                                <input type="number" step="0.01" name="pago_cliente_final" class="form-control form-control-lg fw-bold" placeholder="0.00" required autofocus>
+                                <input type="number" step="0.01" name="pago_cliente_final" id="pago_cliente_final" class="form-control form-control-lg fw-bold" placeholder="0.00" required autofocus>
+                            </div>
+                            <div id="avisoPagoInsuficiente" class="alert alert-danger py-2 px-3 small text-center mt-3 mb-0 d-none">
+                                <i class="bi bi-exclamation-octagon-fill me-1"></i>
+                                <span id="avisoPagoInsuficienteTexto"></span>
                             </div>
                         </div>
                         
-                        <button type="submit" class="btn btn-success btn-lg w-100 mt-3 shadow-sm rounded-pill">
+                        <button type="button" id="btnAbrirConfirmacion" class="btn btn-success btn-lg w-100 mt-3 shadow-sm rounded-pill">
                             Siguiente <i class="bi bi-arrow-right-short"></i>
                         </button>
 
@@ -286,6 +300,53 @@ if ($datosVenta) {
                             <i class="bi bi-x-circle me-1"></i> Cancelar y volver
                         </button>
                     </form>
+
+                    <!-- Modal de confirmación: solo pide confirmar cantidad a cobrar y garrafones -->
+                    <div class="modal fade" id="modalConfirmarVenta" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+                        <div class="modal-dialog modal-dialog-centered">
+                            <div class="modal-content shadow-lg">
+                                <div class="modal-header">
+                                    <h5 class="modal-title"><i class="bi bi-check2-square me-2"></i>Confirmar Venta</h5>
+                                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                                </div>
+                                <div class="modal-body px-4 py-4">
+                                    <p class="text-muted text-center mb-3 small">Verifica que los datos sean correctos antes de continuar.</p>
+
+                                    <div class="confirm-cliente-box d-flex align-items-center gap-3">
+                                        <i class="bi bi-person-circle fs-2 text-primary"></i>
+                                        <div>
+                                            <div class="confirm-cliente-nombre"><?= htmlspecialchars($datosVenta['nombre_cliente']) ?></div>
+                                            <div class="confirm-cliente-codigo">Cliente #<?= htmlspecialchars($datosVenta['codigo_cliente']) ?></div>
+                                        </div>
+                                    </div>
+
+                                    <div class="confirm-row">
+                                        <span class="confirm-label"><i class="bi bi-droplet-fill text-info"></i> Garrafones comprados</span>
+                                        <span class="confirm-value"><?= $datosVenta['cantidad_garrafones'] ?></span>
+                                    </div>
+                                    <?php if ($datosVenta['descuento_aplicado'] > 0): ?>
+                                        <div class="confirm-row">
+                                            <span class="confirm-label"><i class="text-success"></i> Descuento por promoción</span>
+                                            <span class="confirm-value text-success">- $<?= number_format($datosVenta['descuento_aplicado'], 2) ?></span>
+                                        </div>
+                                    <?php endif; ?>
+
+                                    <div class="confirm-total-box">
+                                        <p class="text-muted mb-0 small">Cantidad a cobrar</p>
+                                        <h3 class="fw-bold text-primary mb-0">$<?= number_format($datosVenta['total_final'], 2) ?></h3>
+                                    </div>
+                                </div>
+                                <div class="modal-footer border-0 px-4 pb-4 justify-content-center">
+                                    <button type="button" class="btn btn-outline-secondary w-50 rounded-pill" data-bs-dismiss="modal">
+                                        Cancelar
+                                    </button>
+                                    <button type="button" id="btnConfirmarVenta" class="btn btn-success w-50 rounded-pill">
+                                        Confirmar
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
 
                 <?php else: ?>
                     <div class="pago-detalle border-success" style="border-width: 2px;">
@@ -312,10 +373,75 @@ if ($datosVenta) {
     </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script>
     function confirmarCancelacion() {
         return confirm("¿Estás seguro de que deseas cancelar esta compra? Se eliminará el registro actual.");
     }
+
+    <?php if (!$mostrarTicketFinal && $datosVenta): ?>
+    (function () {
+        const form = document.getElementById('formPago');
+        const inputPago = document.getElementById('pago_cliente_final');
+        const btnAbrir = document.getElementById('btnAbrirConfirmacion');
+        const btnConfirmar = document.getElementById('btnConfirmarVenta');
+        const modalEl = document.getElementById('modalConfirmarVenta');
+        const modal = new bootstrap.Modal(modalEl);
+        const avisoInsuficiente = document.getElementById('avisoPagoInsuficiente');
+        const avisoInsuficienteTexto = document.getElementById('avisoPagoInsuficienteTexto');
+        const totalFinal = <?= json_encode((float)$datosVenta['total_final']) ?>;
+
+        function ocultarAvisoInsuficiente() {
+            avisoInsuficiente.classList.add('d-none');
+        }
+
+        function intentarContinuar() {
+            // 1. Validamos que el campo tenga un valor válido
+            if (!inputPago.checkValidity()) {
+                inputPago.reportValidity();
+                return;
+            }
+
+            const pagoIngresado = parseFloat(inputPago.value);
+
+            // 2. Si el pago es menor al total, avisamos y NO abrimos el modal
+            if (pagoIngresado < totalFinal) {
+                const faltante = (totalFinal - pagoIngresado).toFixed(2);
+                avisoInsuficienteTexto.textContent = `El pago es insuficiente. Faltan $${faltante}`;
+                avisoInsuficiente.classList.remove('d-none');
+                inputPago.focus();
+                return;
+            }
+
+            // 3. Pago suficiente: recién aquí mostramos la confirmación
+            ocultarAvisoInsuficiente();
+            modal.show();
+        }
+
+        btnAbrir.addEventListener('click', intentarContinuar);
+
+        // Al presionar Enter en el campo de pago, el navegador por defecto
+        // enviaría el formulario usando el único botón type="submit" que queda
+        // (el de "Cancelar y volver"). Lo evitamos y en vez de eso disparamos
+        // el mismo flujo que el botón "Siguiente".
+        inputPago.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                intentarContinuar();
+            }
+        });
+
+        // Si el usuario vuelve a escribir, quitamos el aviso viejo para que no confunda
+        inputPago.addEventListener('input', ocultarAvisoInsuficiente);
+
+        btnConfirmar.addEventListener('click', function () {
+            modal.hide();
+            form.submit();
+        });
+        // Si el usuario le da "Cancelar" en el modal, no pasa nada más:
+        // el modal se cierra solo (data-bs-dismiss="modal") y regresa a ingresar el monto.
+    })();
+    <?php endif; ?>
 
     <?php if ($mostrarTicketFinal): ?>
         let segundos = 60;
